@@ -1,58 +1,512 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>Socket.IO chat</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Modern Chat Application</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
     <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
-
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .message-appear {
+        animation: slideIn 0.3s ease-out;
+      }
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
     </style>
   </head>
-  <body>
-    <ul id="messages"></ul>
-    <form id="form" action="">
-      <input id="input" autocomplete="off" /><button>Send</button>
-    </form>
+  <body class="bg-gray-100 h-screen overflow-hidden">
+    <!-- Loading Overlay -->
+    <div
+      id="loading-overlay"
+      class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <div class="bg-white p-6 rounded-lg shadow-xl">
+        <div class="mb-4">Please enter your username to join the chat</div>
+        <input
+          type="text"
+          id="username-input"
+          class="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Enter username"
+        />
+        <button
+          id="join-chat"
+          class="mt-4 w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        >
+          Join Chat
+        </button>
+      </div>
+    </div>
+
+    <div class="flex h-screen">
+      <!-- Sidebar -->
+      <div class="w-64 bg-gray-800 text-white flex flex-col">
+        <!-- User Profile Section -->
+        <div class="p-4 border-b border-gray-700">
+          <div class="flex items-center space-x-3 mb-4">
+            <img
+              id="current-avatar"
+              src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop"
+              class="w-10 h-10 rounded-full cursor-pointer border-2 border-gray-600 hover:border-blue-500 transition-colors"
+            />
+            <div class="flex-1">
+              <div id="username-display" class="text-white font-semibold"></div>
+            </div>
+          </div>
+          <div
+            id="avatar-selector"
+            class="hidden bg-gray-700 p-3 rounded-lg mt-2"
+          >
+            <div class="grid grid-cols-4 gap-2 mb-2" id="predefined-avatars">
+              <!-- Predefined avatars will be inserted here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Channels Section -->
+        <div class="flex-1 overflow-y-auto scrollbar-hide">
+          <div class="p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold">Channels</h2>
+              <button
+                id="new-channel"
+                class="text-sm bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded transition-colors"
+              >
+                <i class="fas fa-plus mr-1"></i>New
+              </button>
+            </div>
+            <div id="channels" class="space-y-1">
+              <!-- Channels will be inserted here -->
+            </div>
+          </div>
+
+          <!-- Online Users Section -->
+          <div class="p-4">
+            <h2 class="text-lg font-semibold mb-4">Online Users</h2>
+            <div id="users" class="space-y-2">
+              <!-- Online users will be inserted here -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Chat Area -->
+      <div class="flex-1 flex flex-col bg-white">
+        <!-- Chat Header -->
+        <div class="bg-white shadow-sm p-4 flex items-center border-b">
+          <div>
+            <h1 id="current-channel" class="text-xl font-semibold">#general</h1>
+            <p id="channel-description" class="text-sm text-gray-500">
+              General discussion channel
+            </p>
+          </div>
+          <div class="ml-auto">
+            <span id="online-count" class="text-sm text-gray-500">
+              <button class="onlineusers">
+                <i class="fas fa-users mr-1"></i>
+              </button>
+              <span>0 online</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Messages Area -->
+        <div
+          class="flex-1 overflow-y-auto p-4 scrollbar-hide"
+          id="messages-container"
+        >
+          <ul id="messages" class="space-y-4">
+            <!-- Messages will be inserted here -->
+          </ul>
+          <div
+            id="typing-indicator"
+            class="text-sm text-gray-500 italic mt-2"
+          ></div>
+        </div>
+
+        <!-- Message Input Area -->
+        <div class="border-t p-4">
+          <form id="form" class="flex items-center space-x-4">
+            <div class="flex-1 relative">
+              <input
+                type="text"
+                id="input"
+                class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Type a message..."
+              />
+            </div>
+            <button
+              type="submit"
+              class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-full transition-colors flex items-center"
+            >
+              <i class="fas fa-paper-plane mr-2"></i>
+              Send
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Toast -->
+    <div
+      id="error-toast"
+      class="hidden fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg"
+    ></div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
       let counter = 0;
-  
-      const socket = io({
-        ackTimeout: 10000,
-        retries: 3,
-        auth: {
-          serverOffset: 0
+      let username = "";
+      let currentChannel = "general";
+      let typingTimeout;
+      let socket;
+
+      // Predefined avatars from Unsplash
+      const predefinedAvatars = [
+        "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop",
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop",
+        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop",
+        "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop",
+        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop",
+        "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=150&h=150&fit=crop",
+        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop",
+        "https://images.unsplash.com/photo-1554151228-14d9def656e4?w=150&h=150&fit=crop",
+      ];
+
+      // DOM Elements
+      const loadingOverlay = document.getElementById("loading-overlay");
+      const onlineusers = document.getElementById("onlineusers");
+      const usernameInput = document.getElementById("username-input");
+      const joinChatButton = document.getElementById("join-chat");
+      const form = document.getElementById("form");
+      const input = document.getElementById("input");
+      const messages = document.getElementById("messages");
+      const typingIndicator = document.getElementById("typing-indicator");
+      const avatarImg = document.getElementById("current-avatar");
+      const avatarSelector = document.getElementById("avatar-selector");
+      const onlineCount = document.getElementById("online-count");
+      const currentChannelHeader = document.getElementById("current-channel");
+      const channelDescription = document.getElementById("channel-description");
+      const messagesContainer = document.getElementById("messages-container");
+      const usernameDisplay = document.getElementById("username-display");
+      const errorToast = document.getElementById("error-toast");
+
+      // Initialize socket connection with username
+      joinChatButton.addEventListener("click", () => {
+        username = usernameInput.value.trim();
+        if (username) {
+          initializeSocket();
+          loadingOverlay.classList.add("hidden");
+          usernameDisplay.textContent = username;
+        } else {
+          showError("Username is required");
         }
       });
-  
-      const form = document.getElementById('form');
-      const input = document.getElementById('input');
-      const messages = document.getElementById('messages');
-  
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        if (input.value) {
-          const clientOffset = `${socket.id}-${counter++}`;
-          socket.emit('chat message', input.value, clientOffset);
-          input.value = '';
+
+      usernameInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          joinChatButton.click();
         }
       });
-  
-      socket.on('chat message', (msg, serverOffset) => {
-        const item = document.createElement('li');
-        item.textContent = msg;
-        messages.appendChild(item);
-        window.scrollTo(0, document.body.scrollHeight);
-        socket.auth.serverOffset = serverOffset;
+
+      // add event users list
+
+      function initializeSocket() {
+        socket = io({
+          auth: {
+            username,
+            avatar: avatarImg.src,
+          },
+        });
+
+        // Socket event handlers
+        socket.on("connect", () => {
+          socket.emit("set username", username);
+          showError("Connected to server", "bg-green-500");
+        });
+
+        socket.on("error", showError);
+
+        socket.on("chat message", (message, serverOffset) => {
+          if (
+            message.username !== username ||
+            message.content.startsWith("@")
+          ) {
+            appendMessage(message);
+          } else {
+            appendMessage(message);
+          }
+          if (socket.auth) {
+            socket.auth.serverOffset = serverOffset;
+          }
+        });
+
+        socket.on("typing", (data) => {
+          if (data.channel === currentChannel && data.username !== username) {
+            typingIndicator.textContent = `${data.username} is typing...`;
+          }
+        });
+
+        socket.on("stop typing", (data) => {
+          if (data.channel === currentChannel) {
+            typingIndicator.textContent = "";
+          }
+        });
+
+        socket.on("user connected", (user) => {
+          appendNotification(`${user} joined the chat`);
+        });
+
+        socket.on("user disconnected", (user) => {
+          appendNotification(`${user} left the chat`);
+        });
+
+        socket.on("update users", (users) => {
+          updateUsersList(users);
+        });
+
+        socket.on("update channels", (channels) => {
+          updateChannelsList(channels);
+        });
+
+        // Initialize event listeners
+        initializeEventListeners();
+      }
+
+      function initializeEventListeners() {
+        // Avatar selection
+        avatarImg.addEventListener("click", () => {
+          avatarSelector.classList.toggle("hidden");
+        });
+
+        // Message input
+        input.addEventListener("input", () => {
+          socket.emit("typing", currentChannel);
+          clearTimeout(typingTimeout);
+          typingTimeout = setTimeout(() => {
+            socket.emit("stop typing", currentChannel);
+          }, 1000);
+        });
+
+        // Message form submission
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (input.value.trim()) {
+            const clientOffset = `${socket.id}-${counter++}`;
+            const message = {
+              content: input.value,
+              channel: currentChannel,
+              username,
+              avatar: avatarImg.src,
+              timestamp: new Date().toISOString(),
+            };
+            socket.emit("chat message", message, `${socket.id}-${counter++}`);
+            input.value = "";
+          }
+        });
+
+        // Initialize predefined avatars
+        const predefinedAvatarsContainer =
+          document.getElementById("predefined-avatars");
+        predefinedAvatars.forEach((avatarSrc) => {
+          const img = document.createElement("img");
+          img.src = avatarSrc;
+          img.className =
+            "w-10 h-10 rounded-full cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all";
+          img.onclick = () => {
+            avatarImg.src = avatarSrc;
+            socket.emit("set avatar", avatarSrc);
+            avatarSelector.classList.add("hidden");
+          };
+          predefinedAvatarsContainer.appendChild(img);
+        });
+
+        // New channel creation
+        document.getElementById("new-channel").onclick = () => {
+          const channelName = prompt("Enter channel name:");
+          if (channelName?.trim()) {
+            const sanitizedName = channelName
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, "-");
+            socket.emit("create channel", {
+              name: sanitizedName,
+              isPrivate: false,
+              description: `Channel for ${channelName} discussions`,
+            });
+          }
+        };
+
+        // Click outside avatar selector
+        document.addEventListener("click", (e) => {
+          if (!avatarSelector.contains(e.target) && e.target !== avatarImg) {
+            avatarSelector.classList.add("hidden");
+          }
+        });
+      }
+
+      function appendMessage(message) {
+        const messageElement = document.createElement("li");
+        messageElement.className = "flex space-x-3 message-appear";
+
+        const timestamp = new Date(message.timestamp).toLocaleTimeString();
+
+        messageElement.innerHTML = `
+                <img src="${message.avatar}" class="w-10 h-10 rounded-full">
+                <div class="flex-1">
+                    <div class="flex items-baseline space-x-2">
+                        <span class="font-semibold">${message.username}</span>
+                        <span class="text-xs text-gray-500">${timestamp}</span>
+                    </div>
+                    <p class="text-gray-800 mt-1">${message.content}</p>
+                </div>
+            `;
+
+        messages.appendChild(messageElement);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+
+      function appendNotification(text) {
+        const notificationElement = document.createElement("li");
+        notificationElement.className =
+          "text-center text-sm text-gray-500 my-2 message-appear";
+        notificationElement.textContent = text;
+        messages.appendChild(notificationElement);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+
+      function updateUsersList(users) {
+        const usersDiv = document.getElementById("users");
+        usersDiv.innerHTML = "";
+
+        // Update the online count
+        const uniqueUserCount = new Set(users.map((user) => user.username))
+          .size;
+        onlineCount.querySelector(
+          "span"
+        ).textContent = `${uniqueUserCount} online`;
+
+        // Create user elements
+        const addedUsers = new Set();
+        users.forEach((user) => {
+          if (!addedUsers.has(user.username)) {
+            addedUsers.add(user.username);
+            const userElement = document.createElement("div");
+            userElement.className =
+              "flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors";
+            userElement.innerHTML = `
+                <img src="${user.avatar}" class="w-8 h-8 rounded-full">
+                <span class="flex-1">${user.username}</span>
+                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+            `;
+            userElement.onclick = () => startPrivateChat(user.username);
+            usersDiv.appendChild(userElement);
+          }
+        });
+      }
+      function updateChannelsList(channels) {
+        const channelsDiv = document.getElementById("channels");
+        channelsDiv.innerHTML = "";
+
+        channels.forEach((channel) => {
+          const channelElement = document.createElement("div");
+          channelElement.className = `flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors ${
+            channel.name === currentChannel ? "bg-gray-700" : ""
+          }`;
+          channelElement.innerHTML = `
+            <span class="text-gray-400">#</span>
+            <span class="flex-1">${channel.name}</span>
+        `;
+          channelElement.onclick = () => joinChannel(channel.name);
+          channelsDiv.appendChild(channelElement);
+        });
+      }
+
+      function startPrivateChat(targetUsername) {
+        if (targetUsername !== username) {
+          input.value = `@${targetUsername} `;
+          input.focus();
+        }
+      }
+
+      function joinChannel(channel) {
+        currentChannel = channel;
+        currentChannelHeader.textContent = `#${channel}`;
+        channelDescription.textContent = `Channel for ${channel} discussions`;
+        socket.emit("join channel", channel);
+        messages.innerHTML = "";
+
+        // Add loading indicator
+        appendNotification("Loading messages...");
+      }
+
+      function showError(message, bgColor = "bg-red-500") {
+        errorToast.textContent = message;
+        errorToast.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded shadow-lg z-50`;
+        errorToast.classList.remove("hidden");
+
+        setTimeout(() => {
+          errorToast.classList.add("hidden");
+        }, 3000);
+      }
+
+      // Handle page visibility
+      document.addEventListener("visibilitychange", () => {
+        if (socket && username) {
+          if (document.hidden) {
+            socket.emit("away");
+          } else {
+            socket.emit("set username", username); // Reconnect as active
+          }
+        }
       });
+
+      // Prevent accidental page refresh/close
+      window.addEventListener("beforeunload", (e) => {
+        if (socket && socket.connected) {
+          e.preventDefault();
+          e.returnValue = "";
+        }
+      });
+
+      // Initialize tooltips for UI elements
+      const tooltipElements = document.querySelectorAll("[data-tooltip]");
+      tooltipElements.forEach((element) => {
+        element.addEventListener("mouseenter", (e) => {
+          const tooltip = document.createElement("div");
+          tooltip.className =
+            "absolute bg-gray-900 text-white text-xs px-2 py-1 rounded -top-8 left-1/2 transform -translate-x-1/2";
+          tooltip.textContent = e.target.dataset.tooltip;
+          e.target.appendChild(tooltip);
+        });
+
+        element.addEventListener("mouseleave", (e) => {
+          const tooltip = e.target.querySelector("div");
+          if (tooltip) tooltip.remove();
+        });
+      });
+
+      // Focus username input on page load
+      window.onload = () => {
+        usernameInput.focus();
+      };
     </script>
   </body>
 </html>
