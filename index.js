@@ -215,9 +215,6 @@ async function main() {
 
         socket.join("general");
 
-        if (oldUser) {
-          io.emit("user disconnected", oldUser.username);
-        }
         io.emit("user connected", username);
 
         // Send updated users list to all clients
@@ -256,6 +253,34 @@ async function main() {
       } catch (e) {
         console.error("Error updating avatar:", e);
         socket.emit("error", "Failed to update avatar");
+      }
+    });
+
+    socket.on("away", async () => {
+      const user = connectedUsers.get(socket.id);
+      if (user) {
+        user.status = "away";
+        connectedUsers.set(socket.id, user);
+        await db.run("UPDATE users SET status = ? WHERE username = ?", [
+          "away",
+          user.username,
+        ]);
+        io.emit("away", user.username);
+        io.emit("update users", Array.from(connectedUsers.values()));
+      }
+    });
+
+    socket.on("back", async () => {
+      const user = connectedUsers.get(socket.id);
+      if (user) {
+        user.status = "back";
+        connectedUsers.set(socket.id, user);
+        await db.run("UPDATE users SET status = ? WHERE username = ?", [
+          "online",
+          user.username,
+        ]);
+        io.emit("back", user.username);
+        io.emit("update users", Array.from(connectedUsers.values()));
       }
     });
 
