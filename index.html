@@ -279,6 +279,14 @@
           appendNotification(`${user} left the chat`);
         });
 
+        socket.on("away", (user) => {
+          appendNotification(`${user} is away from keyboard`);
+        });
+
+        socket.on("back", (user) => {
+          appendNotification(`${user} is back to the keyboard`);
+        });
+
         socket.on("update users", (users) => {
           updateUsersList(users);
         });
@@ -472,8 +480,8 @@
         if (socket && username) {
           if (document.hidden) {
             socket.emit("away");
-          } else {
-            socket.emit("set username", username); // Reconnect as active
+          } else if (document.visibilityState === "visible") {
+            socket.emit("back");
           }
         }
       });
