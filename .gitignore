@@ -6,6 +6,11 @@
 
 node_modules/
 
+
+#database
+*Db.*
+
+
 # User-specific files
 *.rsuser
 *.suo
