@@ -258,6 +258,12 @@
           showError("Connected to server", "bg-green-500");
         });
 
+        // More of that avatar restoring action
+        socket.on("restore avatar", (avatarUrl) => {
+          avatarImg.src = avatarUrl; // Update the avatar image on the top-left
+        });
+
+
         socket.on("error", showError);
 
         socket.on("chat message", (message, serverOffset) => {

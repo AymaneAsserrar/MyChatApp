@@ -214,6 +214,9 @@ async function main() {
 
         socket.join("general");
 
+        // Some of that avatar restoring action
+        socket.emit("restore avatar", avatar);
+        
         // Broadcast user connected event
         io.emit("user connected", username);
 
