@@ -37,7 +37,7 @@ const upload = multer({
 // Cluster setup for scalability
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
-  for (let i = 0; i < numCPUs; i++) {
+  for (let i = 0; i < 1; i++) {
     cluster.fork({
       PORT: 3000 + i,
     });
