@@ -402,51 +402,79 @@
 
       function updateUsersList(users) {
         const usersDiv = document.getElementById("users");
+        const onlineCountSpan = document.getElementById("online-count");
         usersDiv.innerHTML = "";
 
-        // Update the online count
-        const uniqueUserCount = new Set(users.map((user) => user.username))
-          .size;
-        onlineCount.querySelector(
-          "span"
-        ).textContent = `${uniqueUserCount} online`;
+        // Clear existing users
+        while (usersDiv.firstChild) {
+          usersDiv.removeChild(usersDiv.firstChild);
+        }
+
+        // Update online count
+        onlineCountSpan.textContent = `${users.length} online`;
+
+        // Sort users alphabetically by username
+        users.sort((a, b) => a.username.localeCompare(b.username));
 
         // Create user elements
-        const addedUsers = new Set();
         users.forEach((user) => {
-          if (!addedUsers.has(user.username)) {
-            addedUsers.add(user.username);
-            const userElement = document.createElement("div");
-            userElement.className =
-              "flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors";
-            userElement.innerHTML = `
-                <img src="${user.avatar}" class="w-8 h-8 rounded-full">
-                <span class="flex-1">${user.username}</span>
-                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
-            `;
-            userElement.onclick = () => startPrivateChat(user.username);
-            usersDiv.appendChild(userElement);
-          }
+          const userElement = document.createElement("div");
+          userElement.className =
+            "flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors";
+
+          // Status indicator color based on user status
+          const statusColor =
+            user.status === "away" ? "bg-yellow-500" : "bg-green-500";
+
+          userElement.innerHTML = `
+      <img src="${user.avatar}" class="w-8 h-8 rounded-full">
+      <span class="flex-1">${user.username}</span>
+      <span class="w-2 h-2 ${statusColor} rounded-full"></span>
+    `;
+
+          // Add click handler for private messaging
+          userElement.onclick = () => {
+            if (user.username !== username) {
+              // Don't allow messaging yourself
+              startPrivateChat(user.username);
+            }
+          };
+
+          usersDiv.appendChild(userElement);
         });
       }
+
       function updateChannelsList(channels) {
         const channelsDiv = document.getElementById("channels");
         channelsDiv.innerHTML = "";
 
         channels.forEach((channel) => {
           const channelElement = document.createElement("div");
-          channelElement.className = `flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors ${
-            channel.name === currentChannel ? "bg-gray-700" : ""
+          const isActive = channel.name === currentChannel;
+
+          channelElement.className = `flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors${
+            isActive ? " bg-gray-700" : ""
           }`;
+
           channelElement.innerHTML = `
             <span class="text-gray-400">#</span>
             <span class="flex-1">${channel.name}</span>
         `;
-          channelElement.onclick = () => joinChannel(channel.name);
+
+          channelElement.onclick = () => {
+            // Remove active class from all channels
+            const allChannels = channelsDiv.querySelectorAll("div");
+            allChannels.forEach((ch) => ch.classList.remove("bg-gray-700"));
+
+            // Add active class to clicked channel
+            channelElement.classList.add("bg-gray-700");
+
+            joinChannel(channel.name);
+          };
+
           channelsDiv.appendChild(channelElement);
         });
       }
-
       function startPrivateChat(targetUsername) {
         if (targetUsername !== username) {
           input.value = `@${targetUsername} `;
