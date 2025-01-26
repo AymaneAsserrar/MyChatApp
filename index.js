@@ -189,8 +189,6 @@ async function main() {
       }
 
       try {
-        const oldUser = connectedUsers.get(socket.id);
-
         // Get or create user with avatar
         const userRow = await db.get(
           "SELECT avatar FROM users WHERE username = ?",
@@ -210,15 +208,23 @@ async function main() {
         connectedUsers.set(socket.id, {
           username,
           avatar,
+          status: "online",
           channels: ["general"],
         });
 
         socket.join("general");
 
+        // Broadcast user connected event
         io.emit("user connected", username);
 
-        // Send updated users list to all clients
-        const onlineUsers = Array.from(connectedUsers.values());
+        // Get all online users from the connectedUsers map
+        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
+          username: user.username,
+          avatar: user.avatar,
+          status: user.status,
+        }));
+
+        // Broadcast updated users list to all clients
         io.emit("update users", onlineUsers);
       } catch (e) {
         console.error("Error in set username:", e);
@@ -242,61 +248,25 @@ async function main() {
         user.avatar = avatar;
         connectedUsers.set(socket.id, user);
 
-        // Create an avatar update event that clients will use to update message avatars
+        // Get updated list of online users
+        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
+          username: user.username,
+          avatar: user.avatar,
+          status: user.status,
+        }));
+
+        // Broadcast avatar update and user list update
         io.emit("avatar updated", {
           username: user.username,
           newAvatar: avatar,
         });
-
-        // Also update the users list
-        io.emit("update users", Array.from(connectedUsers.values()));
+        io.emit("update users", onlineUsers);
       } catch (e) {
         console.error("Error updating avatar:", e);
         socket.emit("error", "Failed to update avatar");
       }
     });
 
-    socket.on("away", async () => {
-      const user = connectedUsers.get(socket.id);
-      if (user) {
-        user.status = "away";
-        connectedUsers.set(socket.id, user);
-        await db.run("UPDATE users SET status = ? WHERE username = ?", [
-          "away",
-          user.username,
-        ]);
-        io.emit("away", user.username);
-        io.emit("update users", Array.from(connectedUsers.values()));
-      }
-    });
-
-    socket.on("back", async () => {
-      const user = connectedUsers.get(socket.id);
-      if (user) {
-        user.status = "back";
-        connectedUsers.set(socket.id, user);
-        await db.run("UPDATE users SET status = ? WHERE username = ?", [
-          "online",
-          user.username,
-        ]);
-        io.emit("back", user.username);
-        io.emit("update users", Array.from(connectedUsers.values()));
-      }
-    });
-
-    socket.on("avatar updated", (data) => {
-      // Update all existing messages from this user
-      const messages = document.querySelectorAll("#messages li");
-      messages.forEach((messageElement) => {
-        const usernameElement = messageElement.querySelector(".font-semibold");
-        if (usernameElement && usernameElement.textContent === data.username) {
-          const avatarImg = messageElement.querySelector("img");
-          if (avatarImg) {
-            avatarImg.src = data.newAvatar;
-          }
-        }
-      });
-    });
     // Message handling
     socket.on("chat message", async (msg, clientOffset, callback) => {
       const user = connectedUsers.get(socket.id);
@@ -314,10 +284,8 @@ async function main() {
         const currentAvatar = userRow?.avatar || user.avatar;
 
         const result = await db.run(
-          `INSERT INTO messages (
-                  content, client_offset, username, 
-                  channel, is_private, recipient, avatar
-              ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO messages (content, client_offset, username, channel, is_private, recipient, avatar)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             msg.content,
             clientOffset,
@@ -325,7 +293,7 @@ async function main() {
             msg.channel,
             msg.isPrivate ? 1 : 0,
             msg.recipient,
-            currentAvatar, // Use current avatar
+            currentAvatar,
           ]
         );
 
@@ -363,6 +331,53 @@ async function main() {
       }
     });
 
+    // Status update handling
+    socket.on("away", async () => {
+      const user = connectedUsers.get(socket.id);
+      if (user) {
+        user.status = "away";
+        connectedUsers.set(socket.id, user);
+
+        await db.run("UPDATE users SET status = ? WHERE username = ?", [
+          "away",
+          user.username,
+        ]);
+
+        io.emit("away", user.username);
+
+        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
+          username: user.username,
+          avatar: user.avatar,
+          status: user.status,
+        }));
+
+        io.emit("update users", onlineUsers);
+      }
+    });
+
+    socket.on("back", async () => {
+      const user = connectedUsers.get(socket.id);
+      if (user) {
+        user.status = "online";
+        connectedUsers.set(socket.id, user);
+
+        await db.run("UPDATE users SET status = ? WHERE username = ?", [
+          "online",
+          user.username,
+        ]);
+
+        io.emit("back", user.username);
+
+        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
+          username: user.username,
+          avatar: user.avatar,
+          status: user.status,
+        }));
+
+        io.emit("update users", onlineUsers);
+      }
+    });
+
     // Typing indicators
     socket.on("typing", (channel) => {
       const user = connectedUsers.get(socket.id);
@@ -394,7 +409,7 @@ async function main() {
 
         await db.run(
           `INSERT INTO channels (name, created_by, is_private, description) 
-                   VALUES (?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?)`,
           [name, user.username, isPrivate ? 1 : 0, description]
         );
 
@@ -415,15 +430,14 @@ async function main() {
       try {
         socket.join(channel);
 
-        // Modified query to always get the latest avatar
+        // Get messages with latest avatar
         const messages = await db.all(
-          `SELECT 
-                  m.id, m.content, m.username, m.channel, m.timestamp,
-                  COALESCE(u.avatar, m.avatar) as avatar
-               FROM messages m 
-               LEFT JOIN users u ON m.username = u.username 
-               WHERE m.channel = ? 
-               ORDER BY m.timestamp DESC LIMIT 50`,
+          `SELECT m.id, m.content, m.username, m.channel, m.timestamp,
+           COALESCE(u.avatar, m.avatar) as avatar
+           FROM messages m 
+           LEFT JOIN users u ON m.username = u.username 
+           WHERE m.channel = ? 
+           ORDER BY m.timestamp DESC LIMIT 50`,
           [channel]
         );
 
@@ -449,7 +463,7 @@ async function main() {
       }
     });
 
-    // Disconnection handling
+    // Disconnect handling
     socket.on("disconnect", async () => {
       const user = connectedUsers.get(socket.id);
       if (user) {
@@ -462,8 +476,14 @@ async function main() {
           connectedUsers.delete(socket.id);
           io.emit("user disconnected", user.username);
 
-          // Send updated users list
-          const onlineUsers = Array.from(connectedUsers.values());
+          const onlineUsers = Array.from(connectedUsers.values()).map(
+            (user) => ({
+              username: user.username,
+              avatar: user.avatar,
+              status: user.status,
+            })
+          );
+
           io.emit("update users", onlineUsers);
         } catch (e) {
           console.error("Error handling disconnect:", e);
@@ -471,35 +491,14 @@ async function main() {
       }
     });
 
-    function appendMessage(message) {
-      const messageElement = document.createElement("li");
-      messageElement.className = "flex space-x-3 message-appear";
-
-      const timestamp = new Date(message.timestamp).toLocaleTimeString();
-
-      messageElement.innerHTML = `
-          <img src="${message.avatar}" class="user-avatar w-10 h-10 rounded-full">
-          <div class="flex-1">
-              <div class="flex items-baseline space-x-2">
-                  <span class="font-semibold message-username">${message.username}</span>
-                  <span class="text-xs text-gray-500">${timestamp}</span>
-              </div>
-              <p class="text-gray-800 mt-1">${message.content}</p>
-          </div>
-      `;
-
-      messages.appendChild(messageElement);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
     // Message recovery after disconnection
     if (!socket.recovered) {
       try {
         await db.each(
           `SELECT messages.*, users.avatar 
-                   FROM messages 
-                   LEFT JOIN users ON messages.username = users.username
-                   WHERE messages.id > ? AND messages.is_private = 0`,
+           FROM messages 
+           LEFT JOIN users ON messages.username = users.username
+           WHERE messages.id > ? AND messages.is_private = 0`,
           [socket.handshake.auth.serverOffset || 0],
           (_err, row) => {
             socket.emit(
