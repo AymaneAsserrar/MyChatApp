@@ -346,6 +346,7 @@ async function main() {
 
         // Broadcast updated users list to all clients
         io.emit("update users", usersFromDb);
+        io.emit("away",user.username);
       } catch (e) {
         console.error("Error updating away status:", e);
         socket.emit("error", "Failed to update away status");
@@ -374,6 +375,7 @@ async function main() {
 
         // Broadcast updated users list to all clients
         io.emit("update users", usersFromDb);
+        io.emit("back",user.username);
       } catch (e) {
         console.error("Error updating back status:", e);
         socket.emit("error", "Failed to update back status");
