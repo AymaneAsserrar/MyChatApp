@@ -187,7 +187,7 @@ async function main() {
         socket.emit("error", "Username is required");
         return;
       }
-
+    
       try {
         // Get or create user with avatar
         const userRow = await db.get(
@@ -197,13 +197,13 @@ async function main() {
         const avatar =
           userRow?.avatar ||
           "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop";
-
+    
         // Update user in database
         await db.run(
           "INSERT OR REPLACE INTO users (username, avatar, last_seen, status) VALUES (?, ?, CURRENT_TIMESTAMP, ?)",
           [username, avatar, "online"]
         );
-
+    
         // Update connected users map
         connectedUsers.set(socket.id, {
           username,
@@ -211,56 +211,49 @@ async function main() {
           status: "online",
           channels: ["general"],
         });
-
+    
         socket.join("general");
-
+    
         // Broadcast user connected event
         io.emit("user connected", username);
-
-        // Get all online users from the connectedUsers map
-        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
-          username: user.username,
-          avatar: user.avatar,
-          status: user.status,
-        }));
-
+    
+        // Fetch updated list of users from the database instead of using the map
+        const usersFromDb = await db.all(
+          "SELECT username, avatar, status FROM users WHERE status = 'online'"
+        );
+    
         // Broadcast updated users list to all clients
-        io.emit("update users", onlineUsers);
+        io.emit("update users", usersFromDb);
       } catch (e) {
         console.error("Error in set username:", e);
         socket.emit("error", "Failed to set username");
       }
     });
+    
 
     // Avatar update handling
     socket.on("set avatar", async (avatar) => {
       const user = connectedUsers.get(socket.id);
       if (!user) return;
-
+    
       try {
         // Update the avatar in the users table
         await db.run("UPDATE users SET avatar = ? WHERE username = ?", [
           avatar,
           user.username,
         ]);
-
+    
         // Update the user's avatar in memory
         user.avatar = avatar;
         connectedUsers.set(socket.id, user);
-
-        // Get updated list of online users
-        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
-          username: user.username,
-          avatar: user.avatar,
-          status: user.status,
-        }));
-
-        // Broadcast avatar update and user list update
-        io.emit("avatar updated", {
-          username: user.username,
-          newAvatar: avatar,
-        });
-        io.emit("update users", onlineUsers);
+    
+        // Fetch updated list of users from the database
+        const usersFromDb = await db.all(
+          "SELECT username, avatar, status FROM users WHERE status = 'online'"
+        );
+    
+        // Broadcast updated users list to all clients
+        io.emit("update users", usersFromDb);
       } catch (e) {
         console.error("Error updating avatar:", e);
         socket.emit("error", "Failed to update avatar");
@@ -334,49 +327,60 @@ async function main() {
     // Status update handling
     socket.on("away", async () => {
       const user = connectedUsers.get(socket.id);
-      if (user) {
-        user.status = "away";
-        connectedUsers.set(socket.id, user);
-
+      if (!user) return;
+    
+      try {
+        // Update user status in the database
         await db.run("UPDATE users SET status = ? WHERE username = ?", [
           "away",
           user.username,
         ]);
-
-        io.emit("away", user.username);
-
-        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
-          username: user.username,
-          avatar: user.avatar,
-          status: user.status,
-        }));
-
-        io.emit("update users", onlineUsers);
+    
+        // Update the user status in memory
+        user.status = "away";
+        connectedUsers.set(socket.id, user);
+    
+        // Fetch updated list of users from the database
+        const usersFromDb = await db.all(
+          "SELECT username, avatar, status FROM users WHERE status IN ('online', 'away')"
+        );
+    
+        // Broadcast updated users list to all clients
+        io.emit("update users", usersFromDb);
+      } catch (e) {
+        console.error("Error updating away status:", e);
+        socket.emit("error", "Failed to update away status");
       }
     });
 
     socket.on("back", async () => {
       const user = connectedUsers.get(socket.id);
-      if (user) {
-        user.status = "online";
-        connectedUsers.set(socket.id, user);
-
+      if (!user) return;
+    
+      try {
+        // Update user status in the database
         await db.run("UPDATE users SET status = ? WHERE username = ?", [
           "online",
           user.username,
         ]);
-
-        io.emit("back", user.username);
-
-        const onlineUsers = Array.from(connectedUsers.values()).map((user) => ({
-          username: user.username,
-          avatar: user.avatar,
-          status: user.status,
-        }));
-
-        io.emit("update users", onlineUsers);
+    
+        // Update the user status in memory
+        user.status = "online";
+        connectedUsers.set(socket.id, user);
+    
+        // Fetch updated list of users from the database
+        const usersFromDb = await db.all(
+          "SELECT username, avatar, status FROM users WHERE status IN ('online', 'away')"
+        );
+    
+        // Broadcast updated users list to all clients
+        io.emit("update users", usersFromDb);
+      } catch (e) {
+        console.error("Error updating back status:", e);
+        socket.emit("error", "Failed to update back status");
       }
     });
+    
 
     // Typing indicators
     socket.on("typing", (channel) => {
