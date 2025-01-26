@@ -435,14 +435,26 @@
 
         channels.forEach((channel) => {
           const channelElement = document.createElement("div");
-          channelElement.className = `flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors ${
-            channel.name === currentChannel ? "bg-gray-700" : ""
+          const isActive = channel.name === currentChannel;
+
+          channelElement.className = `flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors${
+            isActive ? " bg-gray-700" : ""
           }`;
+
           channelElement.innerHTML = `
             <span class="text-gray-400">#</span>
             <span class="flex-1">${channel.name}</span>
         `;
-          channelElement.onclick = () => joinChannel(channel.name);
+
+          channelElement.onclick = () => {
+            const allChannels = channelsDiv.querySelectorAll("div");
+            allChannels.forEach((ch) => ch.classList.remove("bg-gray-700"));
+
+            channelElement.classList.add("bg-gray-700");
+
+            joinChannel(channel.name);
+          };
+
           channelsDiv.appendChild(channelElement);
         });
       }
