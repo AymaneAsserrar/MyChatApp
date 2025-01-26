@@ -37,7 +37,7 @@ const upload = multer({
 // Cluster setup for scalability
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
-  for (let i = 0; i < numCPUs; i++) {
+  for (let i = 0; i < 4; i++) {         //i < numCPUs
     cluster.fork({
       PORT: 3000 + i,
     });
@@ -217,9 +217,9 @@ async function main() {
         // Broadcast user connected event
         io.emit("user connected", username);
     
-        // Fetch updated list of users from the database instead of using the map
+        // Fetch updated list of users from the database (including 'online' and 'away')
         const usersFromDb = await db.all(
-          "SELECT username, avatar, status FROM users WHERE status = 'online'"
+          "SELECT username, avatar, status FROM users WHERE status IN ('online', 'away')"
         );
     
         // Broadcast updated users list to all clients
@@ -230,8 +230,7 @@ async function main() {
       }
     });
     
-
-    // Avatar update handling
+    // Update the 'set avatar' event handler to correctly update online users
     socket.on("set avatar", async (avatar) => {
       const user = connectedUsers.get(socket.id);
       if (!user) return;
@@ -247,9 +246,9 @@ async function main() {
         user.avatar = avatar;
         connectedUsers.set(socket.id, user);
     
-        // Fetch updated list of users from the database
+        // Fetch updated list of users from the database (including 'online' and 'away')
         const usersFromDb = await db.all(
-          "SELECT username, avatar, status FROM users WHERE status = 'online'"
+          "SELECT username, avatar, status FROM users WHERE status IN ('online', 'away')"
         );
     
         // Broadcast updated users list to all clients
@@ -324,27 +323,27 @@ async function main() {
       }
     });
 
-    // Status update handling
+    // Handle "away" and "back" status updates
     socket.on("away", async () => {
       const user = connectedUsers.get(socket.id);
       if (!user) return;
-    
+
       try {
         // Update user status in the database
         await db.run("UPDATE users SET status = ? WHERE username = ?", [
           "away",
           user.username,
         ]);
-    
+
         // Update the user status in memory
         user.status = "away";
         connectedUsers.set(socket.id, user);
-    
-        // Fetch updated list of users from the database
+
+        // Fetch updated list of users from the database (avoiding duplicates)
         const usersFromDb = await db.all(
-          "SELECT username, avatar, status FROM users WHERE status IN ('online', 'away')"
+          "SELECT DISTINCT username, avatar, status FROM users WHERE status IN ('online', 'away')"
         );
-    
+
         // Broadcast updated users list to all clients
         io.emit("update users", usersFromDb);
       } catch (e) {
@@ -356,23 +355,23 @@ async function main() {
     socket.on("back", async () => {
       const user = connectedUsers.get(socket.id);
       if (!user) return;
-    
+
       try {
         // Update user status in the database
         await db.run("UPDATE users SET status = ? WHERE username = ?", [
           "online",
           user.username,
         ]);
-    
+
         // Update the user status in memory
         user.status = "online";
         connectedUsers.set(socket.id, user);
-    
-        // Fetch updated list of users from the database
+
+        // Fetch updated list of users from the database (avoiding duplicates)
         const usersFromDb = await db.all(
-          "SELECT username, avatar, status FROM users WHERE status IN ('online', 'away')"
+          "SELECT DISTINCT username, avatar, status FROM users WHERE status IN ('online', 'away')"
         );
-    
+
         // Broadcast updated users list to all clients
         io.emit("update users", usersFromDb);
       } catch (e) {
