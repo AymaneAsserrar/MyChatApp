@@ -27,8 +27,8 @@ A real-time chat application built with Node.js, Socket.IO, and SQLite, featurin
 1. Clone the repository:
 
 ```bash
-git clone <your-repo-url>
-cd modern-chat-app
+git clone git@devops.telecomste.fr:souki.mohamed/projetnodejs.git
+cd projetnodejs
 ```
 
 2. Install dependencies:
