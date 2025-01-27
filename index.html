@@ -77,6 +77,18 @@
             <div class="grid grid-cols-4 gap-2 mb-2" id="predefined-avatars">
               <!-- Predefined avatars will be inserted here -->
             </div>
+            <button
+              id="upload-avatar-btn"
+              class="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+            >
+              Upload Avatar
+            </button>
+            <input
+              type="file"
+              id="avatar-file-input"
+              class="hidden"
+              accept="image/*"
+            />
           </div>
         </div>
 
@@ -208,6 +220,9 @@
       const usernameDisplay = document.getElementById("username-display");
       const errorToast = document.getElementById("error-toast");
 
+      const uploadAvatarBtn = document.getElementById("upload-avatar-btn");
+      const avatarFileInput = document.getElementById("avatar-file-input");
+
       // Initialize socket connection with username
       joinChatButton.addEventListener("click", () => {
         username = usernameInput.value.trim();
@@ -242,6 +257,12 @@
           socket.emit("set username", username);
           showError("Connected to server", "bg-green-500");
         });
+
+        // More of that avatar restoring action
+        socket.on("restore avatar", (avatarUrl) => {
+          avatarImg.src = avatarUrl; // Update the avatar image on the top-left
+        });
+
 
         socket.on("error", showError);
 
@@ -299,10 +320,21 @@
         initializeEventListeners();
       }
 
+      function test(){
+        uploadAvatarBtn.addEventListener("click", () => {
+          avatarFileInput.click();
+        });
+
+        avatarFileInput.addEventListener("change", (e) => {
+          handleAvatarUpload(e.target.files[0]);
+        });
+      }
+
       function initializeEventListeners() {
         // Avatar selection
         avatarImg.addEventListener("click", () => {
           avatarSelector.classList.toggle("hidden");
+          test();
         });
 
         // Message input
@@ -368,6 +400,31 @@
             avatarSelector.classList.add("hidden");
           }
         });
+      }
+
+      async function handleAvatarUpload(file) {
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("avatar", file);
+
+        try {
+          const response = await fetch("/upload-avatar", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) throw new Error("Failed to upload avatar");
+
+          const { url } = await response.json();
+
+          // Update avatar
+          avatarImg.src = url;
+          socket.emit("set avatar", url); // Notify server
+          avatarSelector.classList.add("hidden"); // Hide the selector
+        } catch (err) {
+          showError("Failed to upload avatar: " + err.message);
+        }
       }
 
       function appendMessage(message) {
