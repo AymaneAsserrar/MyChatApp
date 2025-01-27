@@ -1,6 +1,11 @@
 # ProjetNodeJS-SOUKI-ASSERRAR
 
+## Some instructions
 
+Press the avatar on the top left to choose between default avatars or upload your own.
+When you logout and re-login with the same name you should keep your info like the chosen avatar.
+To send private messages(hidden to every other user) press the targeted user's name on the left.
+If you tab out, the green dot near the icon turns yellow to indicate the user is away(you just need to collapse the tab).
 
 ## Getting started
 
