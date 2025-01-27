@@ -1,5 +1,75 @@
 # ProjetNodeJS-SOUKI-ASSERRAR
 
+A real-time chat application built with Node.js, Socket.IO, and SQLite, featuring a modern UI with Tailwind CSS.
+
+## Features
+
+- 💬 Real-time messaging with Socket.IO
+- 👤 User authentication and presence detection
+- 🎨 Customizable user avatars with upload support
+- 📡 Automatic reconnection and message recovery
+- 💭 Typing indicators
+- 🔔 Online/Away status updates
+- 📜 Message history persistence with SQLite
+- 🔒 Private messaging support
+- 📝 Multiple chat channels
+- 🎯 Responsive design with Tailwind CSS
+- 🚀 Cluster mode support for scalability
+
+## Prerequisites
+
+- Node.js (v14 or higher)
+- NPM
+- SQLite3
+
+## Installation
+
+1. Clone the repository:
+
+```bash
+git clone <your-repo-url>
+cd modern-chat-app
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Create uploads directory:
+
+```bash
+mkdir -p public/uploads
+```
+
+4. Start the server:
+
+```bash
+npm start
+```
+
+The application will be available at `http://localhost:3000`
+
+## Dependencies
+
+- Express.js - Web application framework
+- Socket.IO - Real-time bidirectional event-based communication
+- SQLite3 - Database engine
+- Multer - File upload handling
+- Tailwind CSS - Utility-first CSS framework
+
+## Project Structure
+
+```
+├── public/
+│   └── uploads/     # Avatar uploads directory
+├── index.html       # Frontend application
+├── index.js         # Server implementation
+├── chat.db          # SQLite database
+└── package.json     # Project configuration
+```
+
 ## Some instructions
 
 Press the avatar on the top left to choose between default avatars or upload your own.
@@ -7,92 +77,140 @@ When you logout and re-login with the same name you should keep your info like t
 To send private messages(hidden to every other user) press the targeted user's name on the left.
 If you tab out, the green dot near the icon turns yellow to indicate the user is away(you just need to collapse the tab).
 
-## Getting started
+## Features in Detail
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### User Management
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- Username selection on entry
+- Custom avatar upload and selection
+- Online/Away status tracking
+- User presence notifications
 
-## Add your files
+### Messaging
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+- Real-time message delivery
+- Message persistence in SQLite database
+- Typing indicators
+- Private messaging support
+- Message history recovery after disconnection
 
+### Channels
+
+- Public channels support
+- Channel creation
+- Channel switching
+- Message history per channel
+
+### UI/UX
+
+- Modern, responsive design
+- Avatar customization interface
+- Real-time status updates
+- Typing indicators
+- Clean, intuitive layout
+
+## Database Schema
+
+### Messages Table
+
+```sql
+CREATE TABLE messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_offset TEXT UNIQUE,
+    content TEXT NOT NULL,
+    username TEXT NOT NULL,
+    channel TEXT DEFAULT 'general',
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_private BOOLEAN DEFAULT 0,
+    recipient TEXT,
+    avatar TEXT
+);
 ```
-cd existing_repo
-git remote add origin https://devops.telecomste.fr/souki.mohamed/projetnodejs.git
-git branch -M main
-git push -uf origin main
+
+### Users Table
+
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    avatar TEXT,
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+    status TEXT DEFAULT 'online'
+);
 ```
 
-## Integrate with your tools
+### Channels Table
 
-- [ ] [Set up project integrations](https://devops.telecomste.fr/souki.mohamed/projetnodejs/-/settings/integrations)
+```sql
+CREATE TABLE channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_private BOOLEAN DEFAULT 0,
+    description TEXT
+);
+```
 
-## Collaborate with your team
+## Socket.IO Events
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+### Client to Server
 
-## Test and Deploy
+- `set username` - Set user's username
+- `chat message` - Send a new message
+- `typing` - User starts typing
+- `stop typing` - User stops typing
+- `away` - User goes away
+- `back` - User returns
+- `create channel` - Create a new channel
+- `join channel` - Join a channel
+- `set avatar` - Update user avatar
 
-Use the built-in continuous integration in GitLab.
+### Server to Client
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+- `chat message` - New message received
+- `typing` - User is typing
+- `stop typing` - User stopped typing
+- `user connected` - User joined
+- `user disconnected` - User left
+- `away` - User went away
+- `back` - User returned
+- `update users` - Users list updated
+- `update channels` - Channels list updated
+- `error` - Error notification
 
-***
+## Error Handling
 
-# Editing this README
+- Automatic reconnection on disconnection
+- Message recovery after connection loss
+- Error notifications for failed operations
+- File upload restrictions and validation
+- Database error handling
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Security Features
 
-## Suggestions for a good README
+- File upload validation
+- SQLite query parameterization
+- Input sanitization
+- File size limits
+- Allowed file types restriction
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Performance Considerations
 
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+- Connection state recovery
+- Cluster mode support
+- Efficient database indexing
+- Message pagination
+- Optimized avatar handling
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+This project is licensed under the ASSERRAR-SOUKI License.
