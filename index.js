@@ -3,8 +3,7 @@ const express = require("express");
 const { createServer } = require("node:http");
 const { join } = require("node:path");
 const { Server } = require("socket.io");
-const sqlite3 = require("sqlite3");
-const { open } = require("sqlite");
+const Database = require("better-sqlite3");
 const { availableParallelism } = require("node:os");
 const cluster = require("node:cluster");
 const { createAdapter, setupPrimary } = require("@socket.io/cluster-adapter");
@@ -46,14 +45,12 @@ if (cluster.isPrimary) {
 }
 
 async function main() {
+
   // Database initialization
-  const db = await open({
-    filename: "chat.db",
-    driver: sqlite3.Database,
-  });
+  const db = new Database("chat.db");
 
   // Create database schema
-  await db.exec(`
+  db.exec(`
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_offset TEXT UNIQUE,
@@ -119,10 +116,7 @@ async function main() {
 
   // Create default channel if it doesn't exist
   try {
-    await db.run(
-      "INSERT INTO channels (name, created_by, description) VALUES (?, ?, ?)",
-      ["general", "system", "General discussion channel"]
-    );
+    db.prepare("INSERT INTO channels (name, created_by, description) VALUES (?, ?, ?)").run("general", "system", "General discussion channel");
   } catch (e) {
     console.log("General channel already exists");
   }
@@ -190,19 +184,13 @@ async function main() {
 
       try {
         // Get or create user with avatar
-        const userRow = await db.get(
-          "SELECT avatar FROM users WHERE username = ?",
-          [username]
-        );
+        const userRow = db.prepare("SELECT avatar FROM users WHERE username = ?").get(username);
         const avatar =
           userRow?.avatar ||
           "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop";
 
         // Update user in database
-        await db.run(
-          "INSERT OR REPLACE INTO users (username, avatar, last_seen, status) VALUES (?, ?, CURRENT_TIMESTAMP, ?)",
-          [username, avatar, "online"]
-        );
+        db.prepare("INSERT OR REPLACE INTO users (username, avatar, last_seen, status) VALUES (?, ?, CURRENT_TIMESTAMP, ?)").run(username, avatar, "online");
 
         // Update connected users map
         connectedUsers.set(socket.id, {
@@ -242,10 +230,7 @@ async function main() {
 
       try {
         // Update the avatar in the users table
-        await db.run("UPDATE users SET avatar = ? WHERE username = ?", [
-          avatar,
-          user.username,
-        ]);
+        db.prepare("UPDATE users SET avatar = ? WHERE username = ?").run(avatar, user.username);
 
         // Update the user's avatar in memory
         user.avatar = avatar;
@@ -280,29 +265,25 @@ async function main() {
 
       try {
         // Get current user avatar
-        const userRow = await db.get(
-          "SELECT avatar FROM users WHERE username = ?",
-          [user.username]
-        );
+        const userRow = db.prepare("SELECT avatar FROM users WHERE username = ?").get(user.username);
         const currentAvatar = userRow?.avatar || user.avatar;
 
-        const result = await db.run(
+        const result = db.prepare(
           `INSERT INTO messages (content, client_offset, username, channel, is_private, recipient, avatar)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            msg.content,
-            clientOffset,
-            user.username,
-            msg.channel,
-            msg.isPrivate ? 1 : 0,
-            msg.recipient,
-            currentAvatar,
-          ]
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          msg.content,
+          clientOffset,
+          user.username,
+          msg.channel,
+          msg.isPrivate ? 1 : 0,
+          msg.recipient,
+          currentAvatar
         );
 
         const fullMessage = {
           ...msg,
-          id: result.lastID,
+          id: result.lastInsertRowid,
           username: user.username,
           avatar: currentAvatar,
           timestamp: new Date().toISOString(),
@@ -341,10 +322,7 @@ async function main() {
         user.status = "away";
         connectedUsers.set(socket.id, user);
 
-        await db.run("UPDATE users SET status = ? WHERE username = ?", [
-          "away",
-          user.username,
-        ]);
+        db.prepare("UPDATE users SET status = ? WHERE username = ?").run("away", user.username);
 
         io.emit("away", user.username);
 
@@ -364,10 +342,7 @@ async function main() {
         user.status = "online";
         connectedUsers.set(socket.id, user);
 
-        await db.run("UPDATE users SET status = ? WHERE username = ?", [
-          "online",
-          user.username,
-        ]);
+        db.prepare("UPDATE users SET status = ? WHERE username = ?").run("online", user.username);
 
         io.emit("back", user.username);
 
@@ -410,15 +385,12 @@ async function main() {
       try {
         const { name, isPrivate, description } = channelData;
 
-        await db.run(
+        db.prepare(
           `INSERT INTO channels (name, created_by, is_private, description) 
-           VALUES (?, ?, ?, ?)`,
-          [name, user.username, isPrivate ? 1 : 0, description]
-        );
+           VALUES (?, ?, ?, ?)`
+        ).run(name, user.username, isPrivate ? 1 : 0, description);
 
-        const channels = await db.all(
-          "SELECT name, description FROM channels WHERE is_private = 0"
-        );
+        const channels = db.prepare("SELECT name, description FROM channels WHERE is_private = 0").all();
         io.emit("update channels", channels);
       } catch (e) {
         console.error("Error creating channel:", e);
@@ -434,15 +406,14 @@ async function main() {
         socket.join(channel);
 
         // Get messages with latest avatar
-        const messages = await db.all(
+        const messages = db.prepare(
           `SELECT m.id, m.content, m.username, m.channel, m.timestamp,
            COALESCE(u.avatar, m.avatar) as avatar
            FROM messages m 
            LEFT JOIN users u ON m.username = u.username 
            WHERE m.channel = ? 
-           ORDER BY m.timestamp DESC LIMIT 50`,
-          [channel]
-        );
+           ORDER BY m.timestamp DESC LIMIT 50`
+        ).all(channel);
 
         messages.reverse().forEach((msg) => {
           socket.emit(
@@ -471,10 +442,7 @@ async function main() {
       const user = connectedUsers.get(socket.id);
       if (user) {
         try {
-          await db.run(
-            "UPDATE users SET last_seen = CURRENT_TIMESTAMP, status = ? WHERE username = ?",
-            ["offline", user.username]
-          );
+          db.prepare("UPDATE users SET last_seen = CURRENT_TIMESTAMP, status = ? WHERE username = ?").run("offline", user.username);
 
           connectedUsers.delete(socket.id);
           io.emit("user disconnected", user.username);
@@ -497,26 +465,25 @@ async function main() {
     // Message recovery after disconnection
     if (!socket.recovered) {
       try {
-        await db.each(
+        const rows = db.prepare(
           `SELECT messages.*, users.avatar 
            FROM messages 
            LEFT JOIN users ON messages.username = users.username
-           WHERE messages.id > ? AND messages.is_private = 0`,
-          [socket.handshake.auth.serverOffset || 0],
-          (_err, row) => {
-            socket.emit(
-              "chat message",
-              {
-                content: row.content,
-                username: row.username,
-                channel: row.channel,
-                avatar: row.avatar,
-                timestamp: row.timestamp,
-              },
-              row.id
-            );
-          }
-        );
+           WHERE messages.id > ? AND messages.is_private = 0`
+        ).all(socket.handshake.auth.serverOffset || 0);
+        rows.forEach((row) => {
+          socket.emit(
+            "chat message",
+            {
+              content: row.content,
+              username: row.username,
+              channel: row.channel,
+              avatar: row.avatar,
+              timestamp: row.timestamp,
+            },
+            row.id
+          );
+        });
       } catch (e) {
         console.error("Error recovering messages:", e);
         socket.emit("error", "Failed to recover messages");
@@ -525,9 +492,7 @@ async function main() {
 
     // Send initial channel list
     try {
-      const channels = await db.all(
-        "SELECT name, description FROM channels WHERE is_private = 0"
-      );
+      const channels = db.prepare("SELECT name, description FROM channels WHERE is_private = 0").all();
       socket.emit("update channels", channels);
     } catch (e) {
       console.error("Error fetching channels:", e);
