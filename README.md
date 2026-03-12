@@ -20,7 +20,7 @@ A real-time chat application built with Node.js, Socket.IO, and SQLite, featurin
 
 - Node.js (v14 or higher)
 - NPM
-- SQLite3
+- better-sqlite3
 
 ## Installation
 
@@ -37,6 +37,7 @@ cd projetnodejs
 npm install
 ```
 
+
 3. Create uploads directory:
 
 ```bash
@@ -51,15 +52,19 @@ npm start
 
 The application will be available at `http://localhost:3000`
 
+
 ## Dependencies
 
 - Express.js - Web application framework
 - Socket.IO - Real-time bidirectional event-based communication
-- SQLite3 - Database engine
+- better-sqlite3 - Fast, simple, synchronous SQLite3 bindings
 - Multer - File upload handling
 - Tailwind CSS - Utility-first CSS framework
 
-## Project Structure
+
+## Notes on Database
+
+This project now uses [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) for all database operations. All database access is synchronous and does not require any build tools or Python/Visual Studio setup. If you previously had issues with `sqlite3` native module installation, these are now resolved.
 
 ```
 ├── public/
@@ -70,12 +75,14 @@ The application will be available at `http://localhost:3000`
 └── package.json     # Project configuration
 ```
 
-## Some instructions
+
+## Usage Tips
 
 Press the avatar on the top left to choose between default avatars or upload your own.
 When you logout and re-login with the same name you should keep your info like the chosen avatar.
 To send private messages(hidden to every other user) press the targeted user's name on the left.
 If you tab out, the green dot near the icon turns yellow to indicate the user is away(you just need to collapse the tab).
+
 
 ## Features in Detail
 
@@ -214,3 +221,8 @@ CREATE TABLE channels (
 ## License
 
 This project is licensed under the ASSERRAR-SOUKI License.
+
+---
+**Changelog**
+
+- 2026-03-12: Migrated from `sqlite3` to `better-sqlite3` for improved reliability and easier installation on all platforms. All database calls are now synchronous.
